@@ -1,0 +1,32 @@
+name: CI/CD Deploy to Raspberry Pi
+
+on:
+  push:
+    branches:
+      - main # Trigger workflow on pushes to main
+
+jobs:
+  deploy:
+    name: Build and Deploy Container
+    runs-on: [self-hosted, raspberry-pi] # Target your Raspberry Pi runner
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # docker-compose.yml declares env_file: .env, which holds real secrets and
+      # lives only on the Pi (never in git) — pull it into the fresh checkout
+      - name: Copy .env from Pi home directory
+        run: cp ~/pi-dashboard/.env .env
+
+      - name: Build New Docker Image
+        run: |
+          docker compose build --no-cache
+
+      - name: Deploy Containers with Docker Compose
+        run: |
+          docker compose up -d --force-recreate
+
+      - name: Clean Up Stale Docker Images
+        run: |
+          docker image prune -f

@@ -8,7 +8,12 @@ WORKDIR /app
 # extra package needed here for that.
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# psutil and lgpio have no prebuilt wheels for 32-bit ARM, so they compile
+# from source — install gcc for the build, then remove it to keep the image slim
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y --auto-remove gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
