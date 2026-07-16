@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --card: #171e2e;
+    --accent: #4fd1c5;
+    --accent-dim: #2c7a72;
+    --text: #e6ecf5;
+    --muted: #8a94a6;
+    --ok: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 {
+    font-size: 22px;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h1 .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    max-width: 900px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px 18px;
+    border: 1px solid #232b3d;
+  }
+  .card .label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+  .card .value { font-size: 26px; font-weight: 600; }
+  .card .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .bar {
+    height: 6px;
+    background: #232b3d;
+    border-radius: 4px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.4s ease; }
+  section { margin-top: 32px; max-width: 900px; }
+  section h2 { font-size: 16px; color: var(--muted); font-weight: 600; margin-bottom: 12px; }
+
+  .projects {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .proj-card {
+    background: var(--card);
+    border: 1px solid #232b3d;
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .proj-title { font-weight: 500; margin-bottom: 12px; }
+  .proj-body { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .pin-row { display: flex; align-items: center; justify-content: space-between; }
+
+  .status-pill {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .btn {
+    background: var(--accent-dim);
+    color: var(--text);
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .btn:hover { background: var(--accent); color: #0f1420; }
+
+  .switch { position: relative; width: 50px; height: 28px; flex-shrink: 0; }
+  .switch input { display: none; }
+  .slider {
+    position: absolute; inset: 0;
+    background: #2b3446; border-radius: 28px;
+    cursor: pointer; transition: 0.2s;
+  }
+  .slider::before {
+    content: ""; position: absolute;
+    width: 22px; height: 22px; left: 3px; top: 3px;
+    background: white; border-radius: 50%; transition: 0.2s;
+  }
+  input:checked + .slider { background: var(--accent-dim); }
+  input:checked + .slider::before { transform: translateX(22px); background: var(--accent); }
+
+  .footer-note { margin-top: 28px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1><span class="dot"></span> Pi Dashboard</h1>
+
+<div class="grid">
+  <div class="card">
+    <div class="label">CPU Usage</div>
+    <div class="value" id="cpu">--%</div>
+    <div class="bar"><div class="bar-fill" id="cpu-bar"></div></div>
+  </div>
+  <div class="card">
+    <div class="label">CPU Temp</div>
+    <div class="value" id="temp">--°C</div>
+  </div>
+  <div class="card">
+    <div class="label">Memory</div>
+    <div class="value" id="mem">--%</div>
+    <div class="sub" id="mem-detail">-- / -- GB</div>
+    <div class="bar"><div class="bar-fill" id="mem-bar"></div></div>
+  </div>
+  <div class="card">
+    <div class="label">Disk</div>
+    <div class="value" id="disk">--%</div>
+    <div class="sub" id="disk-detail">-- / -- GB</div>
+    <div class="bar"><div class="bar-fill" id="disk-bar"></div></div>
+  </div>
+  <div class="card">
+    <div class="label">Uptime</div>
+    <div class="value" id="uptime">-- hrs</div>
+  </div>
+</div>
+
+<section>
+  <h2>Projects</h2>
+  <div class="projects">
+    {{ project_cards|safe }}
+  </div>
+</section>
+
+<div class="footer-note">Refreshes every 2 seconds &middot; served from your Raspberry Pi</div>
+
+<script>
+async function refreshStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const d = await res.json();
+    document.getElementById('cpu').textContent = d.cpu_percent.toFixed(1) + '%';
+    document.getElementById('cpu-bar').style.width = d.cpu_percent + '%';
+    document.getElementById('temp').textContent = (d.cpu_temp !== null ? d.cpu_temp.toFixed(1) : '--') + '°C';
+    document.getElementById('mem').textContent = d.mem_percent.toFixed(1) + '%';
+    document.getElementById('mem-detail').textContent = d.mem_used_gb + ' / ' + d.mem_total_gb + ' GB';
+    document.getElementById('mem-bar').style.width = d.mem_percent + '%';
+    document.getElementById('disk').textContent = d.disk_percent.toFixed(1) + '%';
+    document.getElementById('disk-detail').textContent = d.disk_used_gb + ' / ' + d.disk_total_gb + ' GB';
+    document.getElementById('disk-bar').style.width = d.disk_percent + '%';
+    document.getElementById('uptime').textContent = d.uptime_hours + ' hrs';
+  } catch (e) { console.error('stats fetch failed', e); }
+}
+refreshStats();
+setInterval(refreshStats, 2000);
+</script>
+
+{{ project_scripts|safe }}
+
+</body>
+</html>

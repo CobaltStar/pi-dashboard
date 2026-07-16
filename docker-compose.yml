@@ -1,0 +1,19 @@
+services:
+  dashboard:
+    build: .
+    container_name: pi-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Host networking is needed for:
+    #   - Wake-on-LAN's UDP broadcast packet (Docker's default bridge NATs
+    #     traffic, so a broadcast never reaches your LAN)
+    #   - Simplicity reaching other host services (pihole CLI, etc.)
+    network_mode: host
+    devices:
+      # Grants access to GPIO without needing full --privileged
+      - /dev/gpiomem:/dev/gpiomem
+    volumes:
+      # Read-only access to CPU temp sensor as a fallback if vcgencmd
+      # isn't reachable from inside the container
+      - /sys/class/thermal:/sys/class/thermal:ro

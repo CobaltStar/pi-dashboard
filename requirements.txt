@@ -1,0 +1,5 @@
+flask
+flask-httpauth
+psutil
+gpiozero
+lgpio
