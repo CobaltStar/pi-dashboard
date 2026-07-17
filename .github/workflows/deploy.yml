@@ -16,8 +16,8 @@ jobs:
 
       # docker-compose.yml declares env_file: .env, which holds real secrets and
       # lives only on the Pi (never in git) — pull it into the fresh checkout
-      - name: Copy .env from Pi home directory
-        run: cp ~/pi-dashboard/.env .env
+      - name: Copy .env from Pi secrets directory
+        run: cp ~/secrets/pi-dashboard.env .env
 
       - name: Build New Docker Image
         run: |
