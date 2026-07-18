@@ -176,7 +176,9 @@ refreshStats();
 setInterval(refreshStats, 2000);
 </script>
 
-{{ project_scripts|safe }}
+{% for pid in plugin_script_ids %}
+<script src="/plugins/{{ pid }}/script.js"></script>
+{% endfor %}
 
 </body>
 </html>

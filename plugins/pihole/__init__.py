@@ -40,33 +40,4 @@ def register_routes(app):
         return jsonify({"ok": True, "action": action})
 
 
-CARD_HTML = """
-<div class="proj-card" id="card-pihole">
-  <div class="proj-title">🕳️ Pi-hole</div>
-  <div class="proj-body">
-    <span id="pihole-status" class="status-pill">checking…</span>
-    <label class="switch">
-      <input type="checkbox" id="pihole-toggle" onchange="piholeToggle(this)">
-      <span class="slider"></span>
-    </label>
-  </div>
-</div>
-"""
-
-SCRIPT = """
-async function piholeRefresh() {
-  try {
-    const res = await fetch('/api/pihole/status');
-    const d = await res.json();
-    document.getElementById('pihole-toggle').checked = d.enabled;
-    document.getElementById('pihole-status').textContent = d.enabled ? 'Active' : 'Blocking paused';
-  } catch (e) { console.error(e); }
-}
-async function piholeToggle(box) {
-  const action = box.checked ? 'enable' : 'disable';
-  await fetch(`/api/pihole/${action}`, { method: 'POST' });
-  piholeRefresh();
-}
-piholeRefresh();
-setInterval(piholeRefresh, 5000);
-"""
+# UI lives in card.html and script.js in this folder

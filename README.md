@@ -3,37 +3,42 @@
 A Flask web UI for your Raspberry Pi: live system stats (CPU %, temp, memory,
 disk, uptime) plus a **Projects** section where each project (Pi-hole toggle,
 Wake-on-LAN, GPIO control, whatever you build next) is a self-contained
-plugin. Runs in Docker. GitHub is the source of truth — the Pi pulls from it
-automatically, so day-to-day deploys are just `git push origin main`.
+plugin. Runs in Docker. GitHub is the source of truth — a self-hosted GitHub
+Actions runner on the Pi rebuilds and redeploys on every push, so day-to-day
+deploys are just `git push origin main`.
 
 ## Architecture
 
 ```
 pi-dashboard/
-  app.py                # core: stats API + plugin loader + auth
-  plugins/
-    _example.py          # template — copy this to start a new project
-    pihole.py
-    wol.py
-    gpio.py
-  templates/index.html   # renders stats + auto-generated project cards
+  app.py                  # core: stats API + plugin loader + auth
+  plugins/                # one folder per project — drop a folder in, git push
+    _example/             # reference plugin — copy this folder to start
+      __init__.py         #   routes + logic
+      card.html           #   UI card (Jinja template)
+      script.js           #   card JS (optional)
+    gpio/
+    pihole/
+    wol/
+  templates/index.html    # stats page; stitches in project cards + script tags
   Dockerfile
   docker-compose.yml
-  .env.example            # copy to .env on the Pi, fill in real credentials
-  deploy/
-    setup-on-pi.sh         # one-time: clones from GitHub + installs cron job
-    pull-deploy.sh           # run every minute by cron: pulls + rebuilds on change
+  .env.example            # template for the Pi's real env file (see setup)
+  .github/workflows/deploy.yml  # runs on the Pi's runner on every push to main
 ```
 
 ### Adding a new project
 
-1. Copy `plugins/_example.py` to `plugins/your_project.py`.
-2. Fill in `register_routes(app)` (your API routes), `CARD_HTML` (the UI
-   card), and `SCRIPT` (its JS).
-3. `git push origin main` — the Pi picks it up within a minute.
+1. Copy `plugins/_example/` to `plugins/your_project/`.
+2. Fill in the three files: `__init__.py` (API routes in
+   `register_routes(app)`, plus an optional `card_context()` returning the
+   dict your template needs), `card.html` (the UI card, a Jinja template),
+   and `script.js` (its JS, optional).
+3. `git push origin main` — the runner redeploys automatically.
 
 Nothing else needs editing — the loader in `app.py` auto-discovers every
-file in `plugins/` and stitches its card into the dashboard.
+folder in `plugins/`, stitches its card into the dashboard, and serves its
+script at `/plugins/<name>/script.js`. Folders starting with `_` are skipped.
 
 ## First-time setup
 
@@ -47,46 +52,62 @@ sudo usermod -aG docker $USER
 
 ### 2. Push this repo to GitHub
 
-Turn this project into a git repo if it isn't already, create an empty repo
-on GitHub, then:
+Create an empty repo on GitHub, then:
 ```bash
 git remote add origin git@github.com:<you>/pi-dashboard.git
 git push -u origin main
 ```
 
-### 3. On the Pi: clone it and set up the polling deploy
+### 3. On the Pi: set up the GitHub Actions runner
 
+On GitHub: repo → **Settings → Actions → Runners → New self-hosted runner**,
+pick **Linux**, and follow the download/config commands it shows. Two
+Pi-specific gotchas:
+
+- **Pick the ARM download, not ARM64**, if you're on 32-bit Raspberry Pi OS.
+  `uname -m` saying `aarch64` is misleading — that's the kernel; the userland
+  is 32-bit (check with `getconf LONG_BIT`). The arm64 runner fails with
+  `cannot execute: required file not found`.
+- When `./config.sh` asks for labels, add `raspberry-pi` — the workflow
+  targets `runs-on: [self-hosted, raspberry-pi]`.
+
+Then install it as a service so it survives reboots:
 ```bash
-ssh pi@<pi-ip>
-git clone git@github.com:<you>/pi-dashboard.git ~/deploy-setup-tmp
-bash ~/deploy-setup-tmp/deploy/setup-on-pi.sh git@github.com:<you>/pi-dashboard.git
-rm -rf ~/deploy-setup-tmp
+cd ~/actions-runner
+sudo ./svc.sh install
+sudo ./svc.sh start
 ```
 
-This clones the repo to `~/pi-dashboard` and installs a cron job that runs
-`deploy/pull-deploy.sh` every minute. That script fetches `origin/main`, and
-only if there's a new commit does it reset to it, create `.env` from
-`.env.example` on first run (edit it with real credentials afterward!), and
-run `docker compose up -d --build`. Logs land in `deploy/pull-deploy.log`.
+The runner should now show as "Idle" on the repo's Runners page.
 
-From then on, every `git push origin main` from your dev machine gets picked
-up by the Pi within a minute — no manual steps on the Pi side.
+### 4. On the Pi: create the secrets file
 
-### 4. Set real credentials
+Real credentials live only on the Pi, outside the repo and outside the
+runner's workspace. The deploy workflow copies this file into the checkout
+as `.env` before `docker compose` runs:
 
 ```bash
-ssh pi@<pi-ip>
-nano ~/pi-dashboard/.env      # set DASH_USER / DASH_PASSWORD
-cd ~/pi-dashboard && docker compose up -d --build
+mkdir -p ~/secrets && chmod 700 ~/secrets
+# create ~/secrets/pi-dashboard.env with the contents of .env.example,
+# then set a real DASH_USER / DASH_PASSWORD
+chmod 600 ~/secrets/pi-dashboard.env
 ```
 
-Visit `http://<pi-ip>:5000` — you'll get a browser login prompt (HTTP Basic
-Auth). This is required for every route in the app, since you'll eventually
-expose this beyond your LAN.
+### 5. Deploy
+
+`git push origin main` (or re-run the workflow from the Actions tab). The
+runner checks out the code, copies the secrets file in, builds the image,
+and starts the container. Visit `http://<pi-ip>:5000` — you'll get a browser
+login prompt (HTTP Basic Auth). Auth covers every route in the app, since
+you'll eventually expose this beyond your LAN.
+
+Changed a credential later? Edit `~/secrets/pi-dashboard.env`, then re-run
+the deploy workflow (its `--force-recreate` restarts the container with the
+new values).
 
 ## Plugin-specific setup
 
-**Pi-hole** (`plugins/pihole.py`) shells out to the `pihole` CLI on the host.
+**Pi-hole** (`plugins/pihole/`) shells out to the `pihole` CLI on the host.
 Since the dashboard runs with `network_mode: host`, it can reach the CLI if
 it's installed directly on the Pi. Add a sudoers rule so it can run without a
 password prompt:
@@ -95,14 +116,14 @@ echo "pi ALL=(ALL) NOPASSWD: $(which pihole)" | sudo tee /etc/sudoers.d/pihole-d
 ```
 If your Pi-hole is *also* running in Docker, it's actually simpler: swap the
 `subprocess` calls for calls to Pi-hole's HTTP API instead (no sudoers rule
-needed) — happy to write that version if that's your setup.
+needed).
 
-**Wake-on-LAN** (`plugins/wol.py`): set `TARGET_MAC` to your desktop's MAC
+**Wake-on-LAN** (`plugins/wol/`): set `TARGET_MAC` to your desktop's MAC
 address. Host networking is required for the broadcast packet to reach your
 LAN — this is why `docker-compose.yml` uses `network_mode: host` rather than
 the default bridge network.
 
-**GPIO** (`plugins/gpio.py`): edit `GPIO_PINS` to match your wiring (BCM
+**GPIO** (`plugins/gpio/`): edit `GPIO_PINS` to match your wiring (BCM
 numbering). The compose file passes through `/dev/gpiomem` so the container
 can control pins without needing `--privileged`.
 
@@ -131,17 +152,20 @@ best-to-most-work for a personal setup like this:
    things that can be misconfigured — I'd only reach for this if 1 and 2
    don't fit your situation.
 
-Whichever you pick, make sure `.env` has a strong, unique `DASH_PASSWORD` —
-right now it's the only thing standing between the internet and your GPIO
-pins / Wake-on-LAN / Pi-hole.
+Whichever you pick, make sure the secrets file has a strong, unique
+`DASH_PASSWORD` — it's the only thing standing between the internet and your
+GPIO pins / Wake-on-LAN / Pi-hole.
 
 ## Local development / testing without Docker
 
 ```bash
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-DASH_USER=admin DASH_PASSWORD=test python3 app.py
+python3 -m venv .venv && source .venv/bin/activate
+pip install flask flask-httpauth psutil gpiozero
+DASH_USER=admin DASH_PASSWORD=test flask --app app run --port 5001
 ```
-Runs in mock mode for GPIO if `gpiozero` can't access real hardware (e.g. on
-a non-Pi machine), so you can iterate on plugins without needing to deploy
-every time.
+
+Install the packages individually rather than from `requirements.txt` —
+`lgpio` is Linux-only and fails to build elsewhere. GPIO runs in mock mode
+when real hardware isn't available, so you can iterate on plugins without
+deploying every time. (Port 5001 because macOS's AirPlay Receiver squats on
+5000.)

@@ -36,26 +36,4 @@ def register_routes(app):
         return jsonify({"ok": True})
 
 
-CARD_HTML = """
-<div class="proj-card" id="card-wol">
-  <div class="proj-title">🖥️ Desktop PC</div>
-  <div class="proj-body">
-    <button class="btn" onclick="wakeDesktop()">Wake on LAN</button>
-    <span id="wol-msg" class="status-pill"></span>
-  </div>
-</div>
-"""
-
-SCRIPT = """
-async function wakeDesktop() {
-  const msg = document.getElementById('wol-msg');
-  msg.textContent = 'Sending…';
-  try {
-    await fetch('/api/wol/wake', { method: 'POST' });
-    msg.textContent = 'Packet sent ✓';
-  } catch (e) {
-    msg.textContent = 'Failed';
-  }
-  setTimeout(() => msg.textContent = '', 3000);
-}
-"""
+# UI lives in card.html and script.js in this folder

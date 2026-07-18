@@ -1,0 +1,10 @@
+{# The card shown in the Projects grid. Keep it a self-contained
+   <div class="proj-card">...</div> block. Rendered as a Jinja template
+   with the dict from card_context() (if defined) as its context. #}
+<div class="proj-card" id="card-example">
+  <div class="proj-title">🔧 Example Project</div>
+  <div class="proj-body">
+    <button class="btn" onclick="exampleDoThing()">Do Thing</button>
+    <span id="example-msg" class="status-pill"></span>
+  </div>
+</div>
