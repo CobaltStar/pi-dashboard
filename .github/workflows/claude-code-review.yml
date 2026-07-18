@@ -1,0 +1,31 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    # GitHub-hosted runner — keep Claude off the Pi's deploy runner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Automatic PR review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this pull request. Focus on correctness bugs, security
+            issues, and things that would break the deploy on the Pi.
+            Post concise, actionable feedback as a PR comment; skip nitpicks.
+          claude_args: "--allowed-tools 'Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)'"

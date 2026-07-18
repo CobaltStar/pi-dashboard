@@ -7,8 +7,11 @@ Serves:
     contributes its own API routes + a UI card, so adding a new project
     never requires touching this file.
 
-To add a new project: drop a new .py file in plugins/ following the
-pattern in plugins/_example.py, then git push. That's it.
+Each plugin is a self-contained folder under plugins/ holding its
+routes (__init__.py), card markup (card.html), and JS (script.js).
+
+To add a new project: copy the plugins/_example/ folder, rename it,
+fill in the three files, then git push. That's it.
 
 Run with:
     python3 app.py
@@ -22,7 +25,7 @@ import pkgutil
 import subprocess
 import time
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, abort, jsonify, render_template, render_template_string, send_from_directory
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import check_password_hash, generate_password_hash
 import psutil
@@ -113,11 +116,36 @@ def api_stats():
     })
 
 
+def plugin_dir(module):
+    """Folder a plugin lives in, e.g. plugins/gpio/."""
+    return os.path.dirname(os.path.abspath(module.__file__))
+
+
+@app.route("/plugins/<plugin_id>/script.js")
+def plugin_script(plugin_id):
+    for m in loaded_plugins:
+        if m.PLUGIN_ID == plugin_id:
+            return send_from_directory(plugin_dir(m), "script.js")
+    abort(404)
+
+
 @app.route("/")
 def index():
-    cards = "".join(getattr(m, "CARD_HTML", "") for m in loaded_plugins)
-    scripts = "".join(getattr(m, "SCRIPT", "") for m in loaded_plugins)
-    return render_template("index.html", project_cards=cards, project_scripts=scripts)
+    cards = []
+    script_ids = []
+    for m in loaded_plugins:
+        pid = m.PLUGIN_ID
+        context = m.card_context() if hasattr(m, "card_context") else {}
+        try:
+            with open(os.path.join(plugin_dir(m), "card.html")) as f:
+                cards.append(render_template_string(f.read(), **context))
+        except Exception as e:
+            print(f"[plugins] no card rendered for {pid}: {e}")
+            continue
+        if os.path.exists(os.path.join(plugin_dir(m), "script.js")):
+            script_ids.append(pid)
+    return render_template("index.html", project_cards="".join(cards),
+                           plugin_script_ids=script_ids)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+<div class="proj-card" id="card-gpio">
+  <div class="proj-title">🔌 GPIO Pins</div>
+  <div class="proj-body" style="flex-direction:column; align-items:stretch; gap:8px;">
+    {% for name in pins %}
+    <div class="pin-row">
+      <span>{{ name }}</span>
+      <label class="switch">
+        <input type="checkbox" data-pin="{{ name }}" onchange="gpioToggle(this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    {% endfor %}
+  </div>
+</div>
