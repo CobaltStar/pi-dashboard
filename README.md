@@ -118,8 +118,9 @@ If your Pi-hole is *also* running in Docker, it's actually simpler: swap the
 `subprocess` calls for calls to Pi-hole's HTTP API instead (no sudoers rule
 needed).
 
-**Wake-on-LAN** (`plugins/wol/`): set `TARGET_MAC` to your desktop's MAC
-address. Host networking is required for the broadcast packet to reach your
+**Wake-on-LAN** (`plugins/wol/`): set `WOL_TARGET_MAC` in
+`~/secrets/pi-dashboard.env` to your desktop's MAC address (keep it out of
+the repo). Host networking is required for the broadcast packet to reach your
 LAN — this is why `docker-compose.yml` uses `network_mode: host` rather than
 the default bridge network.
 

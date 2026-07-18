@@ -3,18 +3,19 @@ Wake-on-LAN plugin — send a magic packet to wake your desktop PC.
 
 Setup:
   1. Enable Wake-on-LAN in your desktop's BIOS/UEFI and OS network adapter settings.
-  2. Set TARGET_MAC below to your desktop's MAC address (`ipconfig /all` on
-     Windows, `ip link` on Linux).
+  2. Set WOL_TARGET_MAC in the Pi's env file (~/secrets/pi-dashboard.env) to
+     your desktop's MAC address (`ipconfig /all` on Windows, `ip link` on Linux).
   3. The Pi and desktop need to be on the same local network/broadcast domain.
 """
 
+import os
 import socket
 from flask import jsonify
 
 PLUGIN_ID = "wol"
 
-# EDIT ME: your desktop's MAC address
-TARGET_MAC = "AA:BB:CC:DD:EE:FF"
+# Set in the env file, not here — MAC addresses don't belong in the repo
+TARGET_MAC = os.environ.get("WOL_TARGET_MAC", "")
 
 
 def send_magic_packet(mac: str):
@@ -29,6 +30,8 @@ def send_magic_packet(mac: str):
 def register_routes(app):
     @app.route(f"/api/{PLUGIN_ID}/wake", methods=["POST"])
     def wake():
+        if not TARGET_MAC:
+            return jsonify({"error": "WOL_TARGET_MAC is not set in the env file"}), 500
         try:
             send_magic_packet(TARGET_MAC)
         except Exception as e:
